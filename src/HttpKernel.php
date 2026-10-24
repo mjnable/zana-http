@@ -11,6 +11,7 @@ use Psr\Http\Server\RequestHandlerInterface;
 use Zana\Container\Contracts\ContainerInterface;
 use Zana\Container\ScopeMetadata;
 use Zana\Core\ApplicationInterface;
+use Zana\Core\Correlation;
 use Zana\Core\ScopeKeys;
 
 /**
@@ -20,8 +21,6 @@ use Zana\Core\ScopeKeys;
 final readonly class HttpKernel implements RequestHandlerInterface
 {
     public const HANDLER = 'http.handler';
-
-    private const LOG_CONTEXT = 'Zana\\Logging\\LogContext';
 
     /**
      * @param list<MiddlewareInterface|class-string<MiddlewareInterface>> $middleware
@@ -49,22 +48,16 @@ final readonly class HttpKernel implements RequestHandlerInterface
 
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $requestId = bin2hex(random_bytes(16));
+        $requestId = Correlation::generate();
         $incoming = $request->getHeaderLine($this->correlationHeader);
-        $correlationId = preg_match('/^[A-Za-z0-9._-]{1,128}$/', $incoming) === 1 ? $incoming : $requestId;
+        $correlationId = Correlation::isValid($incoming) ? $incoming : $requestId;
 
         $scope = $this->container->createScope(
             ScopeMetadata::http($requestId)
                 ->withAttribute(ScopeKeys::REQUEST_ID, $requestId)
                 ->withAttribute(ScopeKeys::CORRELATION_ID, $correlationId)
         );
-
-        $logContext = $scope->has(self::LOG_CONTEXT) ? $scope->get(self::LOG_CONTEXT) : null;
-        $previousCorrelation = null;
-        if (is_object($logContext) && method_exists($logContext, 'set') && method_exists($logContext, 'all')) {
-            $previousCorrelation = $logContext->all()[ScopeKeys::CORRELATION_ID] ?? null;
-            $logContext->set(ScopeKeys::CORRELATION_ID, $correlationId);
-        }
+        $restoreLogContext = Correlation::applyToLogContext($scope, $correlationId);
 
         try {
             $request = $request
@@ -87,11 +80,7 @@ final readonly class HttpKernel implements RequestHandlerInterface
 
             return $response->withHeader($this->correlationHeader, $correlationId);
         } finally {
-            if (is_object($logContext) && method_exists($logContext, 'set') && method_exists($logContext, 'remove')) {
-                $previousCorrelation === null
-                    ? $logContext->remove(ScopeKeys::CORRELATION_ID)
-                    : $logContext->set(ScopeKeys::CORRELATION_ID, $previousCorrelation);
-            }
+            $restoreLogContext();
             $scope->dispose();
         }
     }
