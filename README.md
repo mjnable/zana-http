@@ -50,6 +50,19 @@ Throw `HttpException` subclasses (`NotFoundHttpException`,
 the scoped `RequestContext`, `MiddlewarePipeline`, `ResponseEmitter` and
 `ServerRequestCreator::fromGlobals()`.
 
+## New in 2.1
+
+- **Error pages.** Register an `ErrorRendererInterface` to draw HTML error
+  pages; `mj-zana/view` provides one that uses templates.
+- **Security headers.** Add `SecurityHeadersMiddleware` to `http.middleware`:
+  a CSP (with `{nonce}`), HSTS on HTTPS, `nosniff`, a referrer policy and
+  frame protection, configured by `http.security_headers`.
+- **No version banner.** PHP's `X-Powered-By` is removed unless
+  `http.expose_php` is true.
+- **Safe startup.** In `public/index.php`, `HttpKernel::run($builder)`
+  answers 503 with `public/503.html` when the application cannot start,
+  and never shows the exception.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

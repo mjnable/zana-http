@@ -3,9 +3,20 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
-## 2.0.0 — 2026-10-26
+## 2.1.0 — unreleased
 
-The final 2.0 release. No changes since 2.0.0-rc.1.
+### Added
+
+- `ErrorRendererInterface` for HTML error pages; `HtmlErrorPage` is the built-in page (FE-04).
+- `SecurityHeadersMiddleware`: CSP with per-request nonces, HSTS on HTTPS, and safe defaults,
+  configured by `http.security_headers` (FE-06).
+- `HttpKernel::run()`: builds and serves; a failed build answers 503 with a static page and logs the
+  reason (FE-25).
+
+### Changed
+
+- `ResponseEmitter` removes PHP's `X-Powered-By` banner unless `http.expose_php` is true (FE-06).
+- `ErrorMiddleware` is registered scoped, so error renderers can use request services.
 
 ## 2.0.0-beta.1 — 2026-10-25
 
