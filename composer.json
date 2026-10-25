@@ -6,7 +6,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.5",
-        "mj-zana/core": "^2.0",
+        "mj-zana/core": "^2.1",
         "nyholm/psr7": "^1.8",
         "nyholm/psr7-server": "^1.1",
         "psr/http-factory": "^1.1",
@@ -33,7 +33,7 @@
     "repositories": [
         { "type": "path", "url": "../zana-container", "options": { "symlink": true, "versions": { "mj-zana/container": "2.0.0" } } },
         { "type": "path", "url": "../zana-configuration", "options": { "symlink": true, "versions": { "mj-zana/configuration": "2.0.0" } } },
-        { "type": "path", "url": "../zana-core", "options": { "symlink": true, "versions": { "mj-zana/core": "2.0.0" } } }
+        { "type": "path", "url": "../zana-core", "options": { "symlink": true, "versions": { "mj-zana/core": "2.1.0" } } }
     ],
     "scripts": {
         "test": "phpunit",

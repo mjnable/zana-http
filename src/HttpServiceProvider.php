@@ -20,8 +20,12 @@ use Zana\Core\Environment;
 use Zana\Core\ServiceProvider;
 
 /**
- * Registers the PSR-17 factories, the HTTP kernel, error handling and the
- * request context. Reads http.middleware (class names) and http.correlation_header.
+ * Registers the PSR-17 factories, the HTTP kernel, error handling, the
+ * request context and SecurityHeadersMiddleware. Reads http.middleware (class
+ * names), http.correlation_header and http.security_headers.
+ *
+ * ErrorMiddleware is scoped, so a registered ErrorRendererInterface may use
+ * request services.
  */
 final class HttpServiceProvider extends ServiceProvider
 {
@@ -34,10 +38,15 @@ final class HttpServiceProvider extends ServiceProvider
 
         $services
             ->singleton(ResponseFactory::class)
-            ->singleton(ErrorMiddleware::class, static fn (ServiceResolverInterface $r): ErrorMiddleware => new ErrorMiddleware(
+            ->scoped(ErrorMiddleware::class, static fn (ServiceResolverInterface $r): ErrorMiddleware => new ErrorMiddleware(
                 $r->get(ResponseFactory::class),
                 $r->get(Environment::class)->debug,
                 $r->has(LoggerInterface::class) ? $r->get(LoggerInterface::class) : null,
+                $r->has(ErrorRendererInterface::class) ? $r->get(ErrorRendererInterface::class) : null,
+            ))
+            ->scoped(SecurityHeadersMiddleware::class, static fn (ServiceResolverInterface $r): SecurityHeadersMiddleware => SecurityHeadersMiddleware::fromConfig(
+                $r->get(ConfigurationInterface::class)->array('http.security_headers', []),
+                $r->get(RequestContext::class),
             ))
             ->scoped(RequestContext::class)
             // Scoped: terminal handlers and controllers depend on per-request services.

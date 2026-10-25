@@ -14,8 +14,12 @@ use Zana\Http\Exception\UnprocessableEntityHttpException;
 
 /**
  * Turns any exception into an error response: RFC 9457 problem JSON for
- * clients asking for JSON, a minimal HTML page otherwise. Server errors are
- * logged; their details are only shown in debug mode.
+ * clients asking for JSON, an HTML page otherwise. Server errors are logged;
+ * their details are only shown in debug mode.
+ *
+ * The HTML page comes from the ErrorRendererInterface when one is given,
+ * except for server errors in debug mode, which keep the built-in page with
+ * the trace. A failing renderer is logged and replaced by the built-in page.
  */
 final readonly class ErrorMiddleware implements MiddlewareInterface
 {
@@ -25,6 +29,7 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
         private ResponseFactory $responses,
         private bool $debug = false,
         private ?LoggerInterface $logger = null,
+        private ?ErrorRendererInterface $renderer = null,
     ) {
     }
 
@@ -70,23 +75,24 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
             return $this->responses->problem($status, null, $detail, $extra, $headers);
         }
 
-        return $this->responses->html($this->page($status, $detail, $exception), $status, $headers);
-    }
+        if ($this->renderer !== null && !($this->debug && $status >= 500)) {
+            try {
+                $response = $this->renderer->render($exception, $request, $status, $detail);
+                foreach ($headers as $name => $value) {
+                    if (!$response->hasHeader($name)) {
+                        $response = $response->withHeader($name, $value);
+                    }
+                }
 
-    private function page(int $status, ?string $detail, \Throwable $exception): string
-    {
-        $title = $status . ' ' . $this->responses->create($status)->getReasonPhrase();
-        $escape = static fn (string $text): string => htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-
-        $body = '<h1>' . $escape($title) . '</h1>';
-        if ($detail !== null) {
-            $body .= '<p>' . $escape($detail) . '</p>';
+                return $response;
+            } catch (\Throwable $failure) {
+                $this->logger?->error('The error renderer failed: {message}', ['message' => $failure->getMessage(), 'exception' => $failure]);
+            }
         }
-        if ($this->debug) {
-            $body .= '<pre>' . $escape($exception::class . ' in ' . $exception->getFile() . ':' . $exception->getLine() . "\n\n" . $exception->getTraceAsString()) . '</pre>';
-        }
 
-        return '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' . $escape($title) . '</title></head><body>' . $body . '</body></html>';
+        $page = HtmlErrorPage::render($status, $this->responses->create($status)->getReasonPhrase(), $detail, $this->debug ? $exception : null);
+
+        return $this->responses->html($page, $status, $headers);
     }
 
     private static function wantsJson(ServerRequestInterface $request): bool

@@ -8,10 +8,17 @@ use Psr\Http\Message\ResponseInterface;
 
 /**
  * Sends a response to the client through PHP's SAPI.
+ *
+ * PHP's "X-Powered-By: PHP/<version>" banner is removed unless $exposePhp
+ * is true (http.expose_php), as shared hosts often leave expose_php on.
  */
 final class ResponseEmitter
 {
     private const CHUNK_SIZE = 8192;
+
+    public function __construct(private readonly bool $exposePhp = false)
+    {
+    }
 
     /**
      * @throws \RuntimeException If headers were already sent
@@ -20,6 +27,10 @@ final class ResponseEmitter
     {
         if (headers_sent($file, $line)) {
             throw new \RuntimeException("Cannot emit the response: headers were already sent in {$file} on line {$line}.");
+        }
+
+        if (!$this->exposePhp) {
+            header_remove('X-Powered-By');
         }
 
         $status = $response->getStatusCode();
