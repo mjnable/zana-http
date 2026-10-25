@@ -18,6 +18,10 @@ not change this package is not listed.
 - `ResponseEmitter` removes PHP's `X-Powered-By` banner unless `http.expose_php` is true (FE-06).
 - `ErrorMiddleware` is registered scoped, so error renderers can use request services.
 
+## 2.0.0 — 2026-10-26
+
+The final 2.0 release. No changes since 2.0.0-rc.1.
+
 ## 2.0.0-beta.1 — 2026-10-25
 
 ### Changed
