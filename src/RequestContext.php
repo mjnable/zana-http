@@ -30,4 +30,31 @@ final class RequestContext
     {
         return $this->request ?? throw new \LogicException('No request is being handled in this scope.');
     }
+
+    /**
+     * The client's address: found behind trusted proxies by
+     * TrustedProxiesMiddleware, otherwise REMOTE_ADDR. Empty outside HTTP.
+     */
+    public function clientIp(): string
+    {
+        $request = $this->request();
+        $ip = $request->getAttribute(TrustedProxiesMiddleware::CLIENT_IP) ?? $request->getServerParams()['REMOTE_ADDR'] ?? '';
+
+        return is_string($ip) ? $ip : '';
+    }
+
+    public function isSecure(): bool
+    {
+        return $this->request()->getUri()->getScheme() === 'https';
+    }
+
+    /**
+     * The path the application is served under, e.g. "/shop", or "" at the root.
+     */
+    public function basePath(): string
+    {
+        $base = $this->request()->getAttribute(BasePath::ATTRIBUTE, '');
+
+        return is_string($base) ? $base : '';
+    }
 }

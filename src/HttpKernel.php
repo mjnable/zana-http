@@ -30,11 +30,13 @@ final readonly class HttpKernel implements RequestHandlerInterface
 
     /**
      * @param list<MiddlewareInterface|class-string<MiddlewareInterface>> $middleware
+     * @param string $basePath Removed from request paths before routing (BasePath)
      */
     public function __construct(
         private ContainerInterface $container,
         private array $middleware = [],
         private string $correlationHeader = 'X-Correlation-Id',
+        private string $basePath = '',
     ) {
     }
 
@@ -93,6 +95,13 @@ final readonly class HttpKernel implements RequestHandlerInterface
 
     public function handle(ServerRequestInterface $request): ResponseInterface
     {
+        if ($this->basePath !== '') {
+            $path = BasePath::strip($this->basePath, $request->getUri()->getPath());
+            if ($path !== null) {
+                $request = $request->withUri($request->getUri()->withPath($path))->withAttribute(BasePath::ATTRIBUTE, $this->basePath);
+            }
+        }
+
         $requestId = Correlation::generate();
         $incoming = $request->getHeaderLine($this->correlationHeader);
         $correlationId = Correlation::isValid($incoming) ? $incoming : $requestId;
