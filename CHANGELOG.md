@@ -1,0 +1,16 @@
+# Changelog
+
+All Zana packages share one version number and are released together. A release that did
+not change this package is not listed.
+
+## 2.0.0-beta.1 — 2026-10-25
+
+### Changed
+
+- `HttpKernel` uses `Correlation`.
+
+## 2.0.0-alpha.3 — 2026-10-24
+
+First release of the 2.0 line. A PSR-7/15/17 HTTP kernel that handles each request in its own container scope, with middleware, error responses and an emitter. Requires PHP 8.5 or later.
+
+Documentation: [the http guide](https://github.com/mjnable/zana-docs/blob/main/guides/http.md).
