@@ -3,6 +3,14 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.4.0 — unreleased
+
+### Changed
+
+- Factory registrations declare the services they resolve with `uses()`, so the container checks
+  their lifetimes at startup (FE-40).
+- Requires `mj-zana/core` ^2.4.
+
 ## 2.3.0 — 2026-10-26
 
 ### Changed

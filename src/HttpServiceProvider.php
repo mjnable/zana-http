@@ -46,17 +46,17 @@ final class HttpServiceProvider extends ServiceProvider
                 $r->get(Environment::class)->debug,
                 $r->has(LoggerInterface::class) ? $r->get(LoggerInterface::class) : null,
                 $r->has(ErrorRendererInterface::class) ? $r->get(ErrorRendererInterface::class) : null,
-            ))
+            ))->uses(ResponseFactory::class, Environment::class, LoggerInterface::class, ErrorRendererInterface::class)
             ->scoped(SecurityHeadersMiddleware::class, static fn (ServiceResolverInterface $r): SecurityHeadersMiddleware => SecurityHeadersMiddleware::fromConfig(
                 $r->get(ConfigurationInterface::class)->array('http.security_headers', []),
                 $r->get(RequestContext::class),
-            ))
+            ))->uses(ConfigurationInterface::class, RequestContext::class)
             ->scoped(TrustedProxiesMiddleware::class, static function (ServiceResolverInterface $r): TrustedProxiesMiddleware {
                 /** @var list<string> $proxies */
                 $proxies = $r->get(ConfigurationInterface::class)->array('http.trusted_proxies', []);
 
                 return new TrustedProxiesMiddleware($proxies, $r->get(RequestContext::class));
-            })
+            })->uses(ConfigurationInterface::class, RequestContext::class)
             ->singleton(CacheHeadersMiddleware::class)
             ->singleton(PageCache::class, static function (ServiceResolverInterface $r): PageCache {
                 if (!$r->has(CacheInterface::class)) {
@@ -66,7 +66,7 @@ final class HttpServiceProvider extends ServiceProvider
                 assert($cache instanceof CacheInterface);
 
                 return new PageCache($cache, $r->get(ConfigurationInterface::class)->int('http.page_cache.ttl', 3600));
-            })
+            })->uses(CacheInterface::class, ConfigurationInterface::class)
             ->singleton(PageCacheMiddleware::class, static function (ServiceResolverInterface $r): PageCacheMiddleware {
                 $config = $r->get(ConfigurationInterface::class);
                 /** @var list<string> $cookies */
@@ -76,7 +76,7 @@ final class HttpServiceProvider extends ServiceProvider
                 assert($cache instanceof PageCache);
 
                 return new PageCacheMiddleware($cache, $cookies, $sharedMaxAge);
-            })
+            })->uses(ConfigurationInterface::class, PageCache::class)
             ->scoped(RequestContext::class)
             // Scoped: terminal handlers and controllers depend on per-request services.
             ->tryScoped(HttpKernel::HANDLER, NotFoundHandler::class)
@@ -88,7 +88,7 @@ final class HttpServiceProvider extends ServiceProvider
                 $middleware = $config->array('http.middleware', []);
 
                 return new HttpKernel($root, $middleware, $config->string('http.correlation_header', 'X-Correlation-Id'), BasePath::fromConfig($config));
-            });
+            })->uses(ConfigurationInterface::class);
     }
 
     public function origin(): string
