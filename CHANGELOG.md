@@ -3,6 +3,26 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.2.0 — unreleased
+
+### Added
+
+- `TrustedProxiesMiddleware` and `IpRange`: the client address and scheme behind trusted proxies
+  (`http.trusted_proxies`); `RequestContext::clientIp()` and `isSecure()` (FE-12).
+- `BasePath`: running from a sub-folder; `HttpKernel` strips it before routing, and
+  `RequestContext::basePath()` gives it (`http.base_path`, FE-11).
+- `TooManyRequestsHttpException` (429, `Retry-After`) and `ServiceUnavailableHttpException` (503)
+  (FE-13).
+- `FormInput`: trimmed form fields, blank fields absent (FE-15).
+- `#[Cache]` and `CacheHeadersMiddleware`: `Cache-Control`, weak ETags and 304 responses (FE-20).
+- `PageCache` and `PageCacheMiddleware`: full public pages in the PSR-16 cache, invalidated by tag
+  (`http.page_cache.*`, FE-33).
+
+### Changed
+
+- `HttpKernel` takes the base path as a fourth constructor argument (optional).
+- Requires `psr/simple-cache`.
+
 ## 2.1.0 — 2026-10-26
 
 ### Added
