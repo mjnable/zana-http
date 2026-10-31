@@ -235,6 +235,22 @@ final class ContentSiteTest extends TestCase
         $this->assertSame('HIT', $kernel->handle(new ServerRequest('GET', 'https://example.com/'))->getHeaderLine('X-Page-Cache'));
     }
 
+    public function testWithoutACacheThePageCacheFailsOnlyWhenUsed(): void
+    {
+        $container = Application::configure(sys_get_temp_dir() . '/zana-http-content')
+            ->withEnvironment('testing')
+            ->withProviders(HttpServiceProvider::class)
+            ->build()
+            ->container();
+
+        $middleware = $container->get(PageCacheMiddleware::class);   // check and doctor create every singleton
+        $this->assertInstanceOf(PageCacheMiddleware::class, $middleware);
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('PageCache needs a PSR-16 cache');
+        $middleware->process(new ServerRequest('GET', 'https://example.com/'), new Counter());
+    }
+
     private static function context(ServiceResolverInterface $resolver): RequestContext
     {
         $context = $resolver->get(RequestContext::class);

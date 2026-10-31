@@ -19,6 +19,7 @@ use Zana\Container\Contracts\ServiceCollectionInterface;
 use Zana\Container\Contracts\ServiceResolverInterface;
 use Zana\Core\Environment;
 use Zana\Core\ServiceProvider;
+use Zana\Http\Internal\MissingCache;
 
 /**
  * Registers the PSR-17 factories, the HTTP kernel, error handling, the
@@ -59,10 +60,8 @@ final class HttpServiceProvider extends ServiceProvider
             })->uses(ConfigurationInterface::class, RequestContext::class)
             ->singleton(CacheHeadersMiddleware::class)
             ->singleton(PageCache::class, static function (ServiceResolverInterface $r): PageCache {
-                if (!$r->has(CacheInterface::class)) {
-                    throw new \LogicException('PageCache needs a PSR-16 cache: register mj-zana/cache or another ' . CacheInterface::class . '.');
-                }
-                $cache = $r->get(CacheInterface::class);
+                // Without a cache, PageCache fails when used, not when created: an application that never caches pages passes check.
+                $cache = $r->has(CacheInterface::class) ? $r->get(CacheInterface::class) : new MissingCache();
                 assert($cache instanceof CacheInterface);
 
                 return new PageCache($cache, $r->get(ConfigurationInterface::class)->int('http.page_cache.ttl', 3600));

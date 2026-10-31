@@ -3,6 +3,14 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.7.0 — 2026-10-31
+
+### Fixed
+
+- Without a PSR-16 cache, `PageCache` and `PageCacheMiddleware` can be created and fail only when a
+  page is cached or invalidated, so `check` and `doctor` no longer report them in applications that
+  do not cache pages.
+
 ## 2.6.0 — 2026-10-31
 
 ### Changed
