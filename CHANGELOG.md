@@ -3,6 +3,13 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.6.0 — unreleased
+
+### Changed
+
+- Without a PSR-3 logger, `ErrorMiddleware` writes server errors (and a failing error renderer) to PHP's
+  error log: one line with the request and the exception chain's classes, messages, files and lines,
+  never the trace (FE-43). With a logger, the 500's context keeps `method` and `path`.
 ## 2.4.0 — 2026-10-26
 
 ### Changed

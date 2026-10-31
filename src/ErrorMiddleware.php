@@ -17,6 +17,12 @@ use Zana\Http\Exception\UnprocessableEntityHttpException;
  * clients asking for JSON, an HTML page otherwise. Server errors are logged;
  * their details are only shown in debug mode.
  *
+ * Without a PSR-3 logger, server errors go to PHP's error log (error_log(),
+ * the "error_log" file on most shared hosting), so a production 500 always
+ * leaves its reason somewhere (FE-43): one line with the exception chain's
+ * classes, messages, files and lines, never the trace, whose arguments can
+ * hold secrets.
+ *
  * The HTML page comes from the ErrorRendererInterface when one is given,
  * except for server errors in debug mode, which keep the built-in page with
  * the trace. A failing renderer is logged and replaced by the built-in page.
@@ -48,11 +54,9 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
         $headers = $exception instanceof HttpException ? $exception->headers : [];
 
         if ($status >= 500) {
-            $this->logger?->error('{method} {path} failed: {message}', [
+            $this->report($request->getMethod() . ' ' . $request->getUri()->getPath() . ' failed', $exception, [
                 'method' => $request->getMethod(),
                 'path' => $request->getUri()->getPath(),
-                'message' => $exception->getMessage(),
-                'exception' => $exception,
             ]);
         }
 
@@ -86,13 +90,33 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
 
                 return $response;
             } catch (\Throwable $failure) {
-                $this->logger?->error('The error renderer failed: {message}', ['message' => $failure->getMessage(), 'exception' => $failure]);
+                $this->report('The error renderer failed', $failure);
             }
         }
 
         $page = HtmlErrorPage::render($status, $this->responses->create($status)->getReasonPhrase(), $detail, $this->debug ? $exception : null);
 
         return $this->responses->html($page, $status, $headers);
+    }
+
+    /**
+     * Log a server error with the logger, else on one line of PHP's error log.
+     *
+     * @param array<string, string> $context
+     */
+    private function report(string $what, \Throwable $exception, array $context = []): void
+    {
+        if ($this->logger !== null) {
+            $this->logger->error('{what}: {message}', ['what' => $what, ...$context, 'message' => $exception->getMessage(), 'exception' => $exception]);
+
+            return;
+        }
+
+        $chain = [];
+        for ($e = $exception; $e !== null; $e = $e->getPrevious()) {
+            $chain[] = sprintf('%s: %s at %s:%d', $e::class, $e->getMessage(), $e->getFile(), $e->getLine());
+        }
+        error_log((string) preg_replace('/\s*\R\s*/', ' ', '[zana] ' . $what . ': ' . implode('; caused by ', $chain)));
     }
 
     private static function wantsJson(ServerRequestInterface $request): bool
