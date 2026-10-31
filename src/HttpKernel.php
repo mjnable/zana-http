@@ -49,7 +49,7 @@ final readonly class HttpKernel implements RequestHandlerInterface
      *
      *     HttpKernel::run(Application::configure(dirname(__DIR__))->withContainerCache(...));
      *
-     * @param string|null $fallbackPage An HTML file; default <base>/public/503.html, else a built-in page
+     * @param string|null $fallbackPage An HTML file, or a .json file sent as problem JSON (2.9); default <base>/public/503.html, else a built-in page
      */
     public static function run(ApplicationBuilder $builder, ?string $fallbackPage = null): void
     {
@@ -71,9 +71,10 @@ final readonly class HttpKernel implements RequestHandlerInterface
     public static function startupFailure(?string $fallbackPage = null): ResponseInterface
     {
         $page = $fallbackPage !== null && is_file($fallbackPage) ? file_get_contents($fallbackPage) : false;
+        $json = $page !== false && str_ends_with((string) $fallbackPage, '.json');
 
         return new Response(503, [
-            'Content-Type' => 'text/html; charset=utf-8',
+            'Content-Type' => $json ? 'application/problem+json; charset=utf-8' : 'text/html; charset=utf-8',
             'Retry-After' => '300',
             'Cache-Control' => 'no-store',
         ], $page !== false ? $page : self::UNAVAILABLE_PAGE);

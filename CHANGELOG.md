@@ -3,6 +3,14 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.9.0 — 2026-11-01
+
+### Added
+
+- `http.json_errors`: when true, `ErrorMiddleware` answers problem JSON to every client, whatever it
+  accepts, as APIs need (ADR-024). The default stays content negotiation.
+- `HttpKernel::run()` sends a `.json` fallback file as problem JSON when the application cannot start.
+
 ## 2.7.0 — 2026-10-31
 
 ### Fixed

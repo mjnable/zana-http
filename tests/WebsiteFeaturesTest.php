@@ -199,6 +199,22 @@ final class WebsiteFeaturesTest extends TestCase
         }
     }
 
+    public function testAJsonFallbackIsProblemJson(): void
+    {
+        $file = sys_get_temp_dir() . '/zana-http-503-' . bin2hex(random_bytes(4)) . '.json';
+        file_put_contents($file, '{"title": "Service Unavailable", "status": 503}');
+
+        try {
+            $response = HttpKernel::startupFailure($file);
+            $this->assertSame(503, $response->getStatusCode());
+            $this->assertSame('application/problem+json; charset=utf-8', $response->getHeaderLine('Content-Type'));
+            $this->assertSame('{"title": "Service Unavailable", "status": 503}', (string) $response->getBody());
+            $this->assertStringStartsWith('text/html', HttpKernel::startupFailure($file . '.missing')->getHeaderLine('Content-Type'), 'the built-in page stays HTML');
+        } finally {
+            unlink($file);
+        }
+    }
+
     #[RunInSeparateProcess]
     public function testRunAnswers503WhenTheBuildFails(): void
     {

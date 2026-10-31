@@ -26,7 +26,7 @@ use Zana\Http\Internal\MissingCache;
  * request context and the optional middleware (security headers, trusted
  * proxies, cache headers, page cache). Reads http.middleware (class names),
  * http.correlation_header, http.security_headers, http.trusted_proxies,
- * http.base_path and http.page_cache.*.
+ * http.base_path, http.page_cache.* and http.json_errors.
  *
  * ErrorMiddleware is scoped, so a registered ErrorRendererInterface may use
  * request services.
@@ -47,7 +47,8 @@ final class HttpServiceProvider extends ServiceProvider
                 $r->get(Environment::class)->debug,
                 $r->has(LoggerInterface::class) ? $r->get(LoggerInterface::class) : null,
                 $r->has(ErrorRendererInterface::class) ? $r->get(ErrorRendererInterface::class) : null,
-            ))->uses(ResponseFactory::class, Environment::class, LoggerInterface::class, ErrorRendererInterface::class)
+                $r->get(ConfigurationInterface::class)->bool('http.json_errors', false),
+            ))->uses(ResponseFactory::class, Environment::class, LoggerInterface::class, ErrorRendererInterface::class, ConfigurationInterface::class)
             ->scoped(SecurityHeadersMiddleware::class, static fn (ServiceResolverInterface $r): SecurityHeadersMiddleware => SecurityHeadersMiddleware::fromConfig(
                 $r->get(ConfigurationInterface::class)->array('http.security_headers', []),
                 $r->get(RequestContext::class),

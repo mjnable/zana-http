@@ -14,8 +14,9 @@ use Zana\Http\Exception\UnprocessableEntityHttpException;
 
 /**
  * Turns any exception into an error response: RFC 9457 problem JSON for
- * clients asking for JSON, an HTML page otherwise. Server errors are logged;
- * their details are only shown in debug mode.
+ * clients asking for JSON, an HTML page otherwise; with $alwaysJson
+ * (http.json_errors, 2.9), problem JSON for every client, as APIs need.
+ * Server errors are logged; their details are only shown in debug mode.
  *
  * Without a PSR-3 logger, server errors go to PHP's error log (error_log(),
  * the "error_log" file on most shared hosting), so a production 500 always
@@ -36,6 +37,7 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
         private bool $debug = false,
         private ?LoggerInterface $logger = null,
         private ?ErrorRendererInterface $renderer = null,
+        private bool $alwaysJson = false,
     ) {
     }
 
@@ -67,7 +69,7 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
             default => null,
         };
 
-        if (self::wantsJson($request)) {
+        if ($this->alwaysJson || self::wantsJson($request)) {
             $extra = ['instance' => $request->getUri()->getPath()];
             if ($exception instanceof UnprocessableEntityHttpException) {
                 $extra['errors'] = $exception->errors();

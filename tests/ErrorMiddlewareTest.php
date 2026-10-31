@@ -46,6 +46,19 @@ final class ErrorMiddlewareTest extends TestCase
         $this->assertSame('Bad request.', $this->json($response)['detail']);
     }
 
+    public function testAnApiAnswersProblemJsonToEveryClient(): void
+    {
+        $page = $this->render(new NotFoundHttpException(), ['Accept' => 'text/html']);
+        $this->assertStringStartsWith('text/html', $page->getHeaderLine('Content-Type'), 'browsers get the HTML page by default');
+
+        $middleware = new ErrorMiddleware(new ResponseFactory(new Psr17Factory(), new Psr17Factory()), alwaysJson: true);
+        $response = $middleware->render(new NotFoundHttpException(), new ServerRequest('GET', '/patients/42', ['Accept' => 'text/html']));
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertSame('application/problem+json; charset=utf-8', $response->getHeaderLine('Content-Type'));
+        $this->assertSame(404, $this->json($response)['status']);
+    }
+
     public function testValidationErrorsAndAllowHeaders(): void
     {
         $invalid = $this->render(new UnprocessableEntityHttpException(['height' => 'Must be positive.', 'weight' => ['Required.']]), ['Accept' => 'application/json']);
