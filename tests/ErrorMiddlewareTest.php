@@ -12,6 +12,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Psr\Log\AbstractLogger;
 use Zana\Http\ErrorMiddleware;
+use Zana\Http\ExceptionMapperInterface;
 use Zana\Http\Exception\BadRequestHttpException;
 use Zana\Http\Exception\ForbiddenHttpException;
 use Zana\Http\Exception\HttpException;
@@ -44,6 +45,47 @@ final class ErrorMiddlewareTest extends TestCase
 
         $this->assertSame(400, $response->getStatusCode());
         $this->assertSame('Bad request.', $this->json($response)['detail']);
+    }
+
+    public function testMappersTurnOtherExceptionsIntoHttpErrors(): void
+    {
+        $failing = new class () implements ExceptionMapperInterface {
+            public function map(\Throwable $exception): ?HttpException
+            {
+                throw new \LogicException('broken mapper');
+            }
+        };
+        $ignoring = new class () implements ExceptionMapperInterface {
+            public function map(\Throwable $exception): ?HttpException
+            {
+                return null;
+            }
+        };
+        $fields = new class () implements ExceptionMapperInterface {
+            public function map(\Throwable $exception): ?HttpException
+            {
+                return $exception instanceof \DomainException ? new UnprocessableEntityHttpException(['email' => 'Taken.'], previous: $exception) : null;
+            }
+        };
+        $logger = new class () extends AbstractLogger {
+            /** @var list<string> */
+            public array $whats = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->whats[] = is_string($context['what'] ?? null) ? $context['what'] : '';
+            }
+        };
+        $middleware = new ErrorMiddleware(new ResponseFactory(new Psr17Factory(), new Psr17Factory()), logger: $logger, mappers: [$failing, $ignoring, $fields]);
+        $request = new ServerRequest('POST', '/accounts', ['Accept' => 'application/json']);
+
+        $mapped = $middleware->render(new \DomainException('email taken'), $request);
+        $this->assertSame(422, $mapped->getStatusCode());
+        $this->assertSame(['email' => ['Taken.']], $this->json($mapped)['errors']);
+        $this->assertSame([$failing::class . ' failed'], $logger->whats, 'the failing mapper is reported, and skipped');
+
+        $this->assertSame(500, $middleware->render(new \RuntimeException('other'), $request)->getStatusCode(), 'unmapped exceptions stay server errors');
+        $this->assertSame(404, $middleware->render(new NotFoundHttpException(), $request)->getStatusCode(), 'HTTP exceptions are not mapped');
     }
 
     public function testAnApiAnswersProblemJsonToEveryClient(): void

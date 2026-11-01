@@ -43,6 +43,12 @@ Throw `HttpException` subclasses (`NotFoundHttpException`,
   `application/problem+json` response; browsers get a minimal HTML page.
 - **Server errors** are logged through PSR-3 when a logger is registered.
   Their details are only shown in debug mode.
+- **APIs** (2.9): `http.json_errors` answers problem JSON to every client.
+- **Exception mappers** (2.10): services tagged `ExceptionMapperInterface::TAG`
+  turn other exceptions into `HttpException`s first; validation and
+  serialization register mappers that answer a 422 with `errors` per field.
+- **`check`** (2.10) creates every global middleware once, so one that needs
+  a service nobody registered is reported before the first request.
 
 ## Helpers
 

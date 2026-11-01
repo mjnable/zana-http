@@ -3,6 +3,20 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.10.0 — 2026-11-01
+
+### Added
+
+- Exception mappers: services tagged `ExceptionMapperInterface::TAG` turn exceptions that are not
+  `HttpException`s into HTTP errors before `ErrorMiddleware` renders them; a failing mapper is
+  reported and skipped (ADR-025).
+- `Inspection\MiddlewareCheck` for `check`: every global middleware in `http.middleware` exists, is
+  registered, and can be created in a fresh scope (`http.middleware`).
+
+### Changed
+
+- Requires `mj-zana/core` ^2.7.
+
 ## 2.9.0 — 2026-11-01
 
 ### Added

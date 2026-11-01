@@ -18,7 +18,9 @@ use Zana\Container\Contracts\ContainerInterface;
 use Zana\Container\Contracts\ServiceCollectionInterface;
 use Zana\Container\Contracts\ServiceResolverInterface;
 use Zana\Core\Environment;
+use Zana\Core\Inspection\ApplicationCheck;
 use Zana\Core\ServiceProvider;
+use Zana\Http\Inspection\MiddlewareCheck;
 use Zana\Http\Internal\MissingCache;
 
 /**
@@ -48,7 +50,9 @@ final class HttpServiceProvider extends ServiceProvider
                 $r->has(LoggerInterface::class) ? $r->get(LoggerInterface::class) : null,
                 $r->has(ErrorRendererInterface::class) ? $r->get(ErrorRendererInterface::class) : null,
                 $r->get(ConfigurationInterface::class)->bool('http.json_errors', false),
+                array_values(array_filter($r->tagged(ExceptionMapperInterface::TAG), static fn (object $mapper): bool => $mapper instanceof ExceptionMapperInterface)),
             ))->uses(ResponseFactory::class, Environment::class, LoggerInterface::class, ErrorRendererInterface::class, ConfigurationInterface::class)
+            ->singleton(MiddlewareCheck::class)->tag(ApplicationCheck::TAG, MiddlewareCheck::class)
             ->scoped(SecurityHeadersMiddleware::class, static fn (ServiceResolverInterface $r): SecurityHeadersMiddleware => SecurityHeadersMiddleware::fromConfig(
                 $r->get(ConfigurationInterface::class)->array('http.security_headers', []),
                 $r->get(RequestContext::class),

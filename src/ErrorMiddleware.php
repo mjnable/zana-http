@@ -27,6 +27,10 @@ use Zana\Http\Exception\UnprocessableEntityHttpException;
  * The HTML page comes from the ErrorRendererInterface when one is given,
  * except for server errors in debug mode, which keep the built-in page with
  * the trace. A failing renderer is logged and replaced by the built-in page.
+ *
+ * An exception that is not an HttpException is first offered to the
+ * ExceptionMapperInterface services (2.10), e.g. a ValidationException
+ * becomes a 422 with its field errors.
  */
 final readonly class ErrorMiddleware implements MiddlewareInterface
 {
@@ -38,6 +42,8 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
         private ?LoggerInterface $logger = null,
         private ?ErrorRendererInterface $renderer = null,
         private bool $alwaysJson = false,
+        /** @var list<ExceptionMapperInterface> */
+        private array $mappers = [],
     ) {
     }
 
@@ -52,6 +58,7 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
 
     public function render(\Throwable $exception, ServerRequestInterface $request): ResponseInterface
     {
+        $exception = $this->map($exception);
         $status = $exception instanceof HttpException ? $exception->status : 500;
         $headers = $exception instanceof HttpException ? $exception->headers : [];
 
@@ -99,6 +106,30 @@ final readonly class ErrorMiddleware implements MiddlewareInterface
         $page = HtmlErrorPage::render($status, $this->responses->create($status)->getReasonPhrase(), $detail, $this->debug ? $exception : null);
 
         return $this->responses->html($page, $status, $headers);
+    }
+
+    /**
+     * The first mapper's HttpException for an exception that is not one; a
+     * failing mapper is reported and skipped.
+     */
+    private function map(\Throwable $exception): \Throwable
+    {
+        if ($exception instanceof HttpException) {
+            return $exception;
+        }
+        foreach ($this->mappers as $mapper) {
+            try {
+                $mapped = $mapper->map($exception);
+            } catch (\Throwable $failure) {
+                $this->report($mapper::class . ' failed', $failure);
+                continue;
+            }
+            if ($mapped !== null) {
+                return $mapped;
+            }
+        }
+
+        return $exception;
     }
 
     /**
