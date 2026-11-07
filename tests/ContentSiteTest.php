@@ -23,10 +23,12 @@ use Zana\Http\Exception\TooManyRequestsHttpException;
 use Zana\Http\FormInput;
 use Zana\Http\HttpKernel;
 use Zana\Http\HttpServiceProvider;
+use Zana\Http\Inspection\TrustedProxiesCheck;
 use Zana\Http\IpRange;
 use Zana\Http\PageCache;
 use Zana\Http\PageCacheMiddleware;
 use Zana\Http\RequestContext;
+use Zana\Http\SecurityHeadersMiddleware;
 use Zana\Http\TrustedProxiesMiddleware;
 
 final class ContentSiteTest extends TestCase
@@ -99,9 +101,47 @@ final class ContentSiteTest extends TestCase
         $context = new RequestContext();
         $request = new ServerRequest('GET', 'http://example.com/', ['Forwarded' => 'for="[2001:db8::7]:4711";proto=https, for=10.0.0.3'], serverParams: ['REMOTE_ADDR' => '10.0.0.1']);
 
-        (new TrustedProxiesMiddleware(['10.0.0.0/8'], $context))->process($request, new Answer());
+        (new TrustedProxiesMiddleware(['10.0.0.0/8'], $context, TrustedProxiesMiddleware::FORWARDED))->process($request, new Answer());
 
         $this->assertSame('2001:db8::7', $context->clientIp());
+    }
+
+    public function testOnlyTheConfiguredHeaderIsRead(): void
+    {
+        // The proxy appends the real client to X-Forwarded-For and passes the client's own Forwarded header on.
+        $headers = ['Forwarded' => 'for=1.2.3.4', 'X-Forwarded-For' => '203.0.113.50'];
+        $context = new RequestContext();
+        (new TrustedProxiesMiddleware(['10.0.0.0/8'], $context))->process(new ServerRequest('GET', 'http://example.com/', $headers, serverParams: ['REMOTE_ADDR' => '10.0.0.2']), new Answer());
+        $this->assertSame('203.0.113.50', $context->clientIp(), 'a client cannot choose its address with Forwarded');
+
+        $context = new RequestContext();
+        $headers = ['Forwarded' => 'for=203.0.113.50', 'X-Forwarded-For' => '1.2.3.4'];
+        (new TrustedProxiesMiddleware(['10.0.0.0/8'], $context, TrustedProxiesMiddleware::FORWARDED))->process(new ServerRequest('GET', 'http://example.com/', $headers, serverParams: ['REMOTE_ADDR' => '10.0.0.2']), new Answer());
+        $this->assertSame('203.0.113.50', $context->clientIp(), 'nor with X-Forwarded-For when the proxy sets Forwarded');
+    }
+
+    public function testTheSchemeIsTheOneRecordedForTheClientsHop(): void
+    {
+        $scheme = static function (array $headers): bool {
+            $context = new RequestContext();
+            (new TrustedProxiesMiddleware(['10.0.0.0/8'], $context))->process(new ServerRequest('GET', 'http://example.com/', $headers, serverParams: ['REMOTE_ADDR' => '10.0.0.2']), new Answer());
+
+            return $context->isSecure();
+        };
+
+        $this->assertFalse($scheme(['X-Forwarded-For' => '203.0.113.50', 'X-Forwarded-Proto' => 'https, http']), 'a client-sent value before the proxy\'s is ignored');
+        $this->assertTrue($scheme(['X-Forwarded-For' => '203.0.113.50', 'X-Forwarded-Proto' => 'https']), 'a single value, as most proxies set it, is read');
+        $this->assertTrue($scheme(['X-Forwarded-For' => '203.0.113.50, 10.0.0.9', 'X-Forwarded-Proto' => 'https, http']), 'through two proxies, the first one\'s');
+    }
+
+    public function testAMalformedRangeTrustsNobody(): void
+    {
+        foreach (['10.0.0.0/abc', '10.0.0.0/', '10.0.0.0/-1', '10.0.0.0/99', 'not-an-address'] as $range) {
+            $this->assertFalse(IpRange::contains([$range], '198.51.100.7'), $range);
+            $this->assertSame([$range], IpRange::invalid([$range]), $range);
+        }
+        $this->assertTrue(IpRange::contains(['10.0.0.0/ 8'], '10.1.2.3'), 'spaces are forgiven');
+        $this->assertSame([], IpRange::invalid(['10.0.0.0/8', '203.0.113.7', '2001:db8::/32', ' 10.0.0.0 / 8 ']));
     }
 
     // ── FE-11 ──────────────────────────────────────────────────────────────
@@ -222,6 +262,40 @@ final class ContentSiteTest extends TestCase
             $middleware->process($page->withUri($page->getUri()->withPath('/' . md5(serialize($headers)))), $once);
             $this->assertSame(2, $once->calls, json_encode($headers, JSON_THROW_ON_ERROR));
         }
+    }
+
+    public function testPagesWithACspNonceAreNeitherStoredNorServed(): void
+    {
+        $store = new MemoryCache();
+        $middleware = new PageCacheMiddleware(new PageCache($store));
+        $page = new ServerRequest('GET', 'https://example.com/');
+
+        $outer = new Counter();   // SecurityHeadersMiddleware first: the request carries the nonce
+        $middleware->process($page->withAttribute(SecurityHeadersMiddleware::NONCE_ATTRIBUTE, 'n1'), $outer);
+        $middleware->process($page->withAttribute(SecurityHeadersMiddleware::NONCE_ATTRIBUTE, 'n2'), $outer);
+        $this->assertSame(2, $outer->calls, 'a cached page would keep the first nonce in its scripts');
+
+        $inner = new Counter(['Content-Security-Policy' => "script-src 'nonce-abc'"]);   // the cache first: the response carries it
+        $middleware->process($page->withUri($page->getUri()->withPath('/inner')), $inner);
+        $middleware->process($page->withUri($page->getUri()->withPath('/inner')), $inner);
+        $this->assertSame(2, $inner->calls, 'every visitor would share one nonce');
+
+        (new PageCache($store))->put($page->withUri($page->getUri()->withPath('/old')), new Response(200, ['Content-Security-Policy' => "script-src 'nonce-old'"], 'stored by 2.19.1'));
+        $fresh = new Counter();
+        $this->assertSame('page 1', (string) $middleware->process($page->withUri($page->getUri()->withPath('/old')), $fresh)->getBody(), 'an entry stored before 2.19.2 is not served');
+    }
+
+    public function testTheTrustedProxiesCheck(): void
+    {
+        $findings = static fn (array $config): array => array_map(
+            static fn ($finding): string => $finding->message,
+            (new TrustedProxiesCheck())->findings(Application::configure(sys_get_temp_dir() . '/zana-http-proxies')->withEnvironment('testing')->withConfiguration($config)->withProviders(HttpServiceProvider::class)->build()),
+        );
+
+        $this->assertSame([], $findings(['http.trusted_proxies' => ['10.0.0.0/8', '203.0.113.7']]));
+        $this->assertCount(2, $findings(['http.trusted_proxies' => ['10.0.0.0/abc', '10.0.0.0/8', 'proxy.example']]));
+        $this->assertStringContainsString('"10.0.0.0/abc"', $findings(['http.trusted_proxies' => ['10.0.0.0/abc']])[0]);
+        $this->assertCount(1, $findings(['http.trusted_proxies_header' => 'x-real-ip']));
     }
 
     public function testTheProviderWiresThePageCacheToTheApplicationCache(): void

@@ -21,6 +21,7 @@ use Zana\Core\Environment;
 use Zana\Core\Inspection\ApplicationCheck;
 use Zana\Core\ServiceProvider;
 use Zana\Http\Inspection\MiddlewareCheck;
+use Zana\Http\Inspection\TrustedProxiesCheck;
 use Zana\Http\Internal\MissingCache;
 
 /**
@@ -53,6 +54,7 @@ final class HttpServiceProvider extends ServiceProvider
                 array_values(array_filter($r->tagged(ExceptionMapperInterface::TAG), static fn (object $mapper): bool => $mapper instanceof ExceptionMapperInterface)),
             ))->uses(ResponseFactory::class, Environment::class, LoggerInterface::class, ErrorRendererInterface::class, ConfigurationInterface::class)
             ->singleton(MiddlewareCheck::class)->tag(ApplicationCheck::TAG, MiddlewareCheck::class)
+            ->singleton(TrustedProxiesCheck::class)->tag(ApplicationCheck::TAG, TrustedProxiesCheck::class)
             ->scoped(SecurityHeadersMiddleware::class, static fn (ServiceResolverInterface $r): SecurityHeadersMiddleware => SecurityHeadersMiddleware::fromConfig(
                 $r->get(ConfigurationInterface::class)->array('http.security_headers', []),
                 $r->get(RequestContext::class),
@@ -60,8 +62,9 @@ final class HttpServiceProvider extends ServiceProvider
             ->scoped(TrustedProxiesMiddleware::class, static function (ServiceResolverInterface $r): TrustedProxiesMiddleware {
                 /** @var list<string> $proxies */
                 $proxies = $r->get(ConfigurationInterface::class)->array('http.trusted_proxies', []);
+                $header = $r->get(ConfigurationInterface::class)->string('http.trusted_proxies_header', TrustedProxiesMiddleware::X_FORWARDED_FOR);
 
-                return new TrustedProxiesMiddleware($proxies, $r->get(RequestContext::class));
+                return new TrustedProxiesMiddleware($proxies, $r->get(RequestContext::class), $header);
             })->uses(ConfigurationInterface::class, RequestContext::class)
             ->singleton(CacheHeadersMiddleware::class)
             ->singleton(PageCache::class, static function (ServiceResolverInterface $r): PageCache {

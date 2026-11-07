@@ -3,6 +3,17 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.19.2 — Unreleased
+
+### Security
+
+- `TrustedProxiesMiddleware` reads one forwarding header: X-Forwarded-For, or `Forwarded` with
+  `http.trusted_proxies_header: forwarded`. Before, a client's own `Forwarded` header won over X-Forwarded-For.
+- X-Forwarded-Proto and X-Forwarded-Port are read from the entry for the client's hop, not the leftmost one.
+- `IpRange` matches nothing for a range it cannot read, such as `10.0.0.0/abc`, which used to match every address.
+  `IpRange::invalid()` and the `http.trusted_proxies` check report them.
+- `PageCacheMiddleware` neither stores nor serves a page with a CSP nonce.
+
 ## 2.10.0 — 2026-11-01
 
 ### Added

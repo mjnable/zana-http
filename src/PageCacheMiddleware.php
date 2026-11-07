@@ -16,7 +16,9 @@ use Psr\Http\Server\RequestHandlerInterface;
  * - the request has no Authorization header and none of the private cookies
  *   (http.page_cache.private_cookies, default the session cookie);
  * - the response is 200, sets no cookie, has no Vary other than
- *   Accept-Encoding, and is not marked private or no-store.
+ *   Accept-Encoding, and is not marked private or no-store;
+ * - neither the request nor the response carries a CSP nonce, which must be
+ *   new for each response (2.19.2).
  *
  * With http.page_cache.shared_max_age, stored pages also get
  * Cache-Control: public, s-maxage=… for a CDN, unless they have Cache-Control.
@@ -41,7 +43,7 @@ final readonly class PageCacheMiddleware implements MiddlewareInterface
         }
 
         $cached = $this->cache->get($request);
-        if ($cached !== null) {
+        if ($cached !== null && !self::hasNonce($cached)) {
             return $cached->withHeader('X-Page-Cache', 'HIT');
         }
 
@@ -60,7 +62,7 @@ final readonly class PageCacheMiddleware implements MiddlewareInterface
 
     private function cacheableRequest(ServerRequestInterface $request): bool
     {
-        if (!in_array($request->getMethod(), ['GET', 'HEAD'], true) || $request->hasHeader('Authorization')) {
+        if (!in_array($request->getMethod(), ['GET', 'HEAD'], true) || $request->hasHeader('Authorization') || $request->getAttribute(SecurityHeadersMiddleware::NONCE_ATTRIBUTE) !== null) {
             return false;
         }
         $cookies = $request->getCookieParams();
@@ -78,7 +80,7 @@ final readonly class PageCacheMiddleware implements MiddlewareInterface
 
     private static function shareable(ResponseInterface $response): bool
     {
-        if ($response->getStatusCode() !== 200 || $response->hasHeader('Set-Cookie')) {
+        if ($response->getStatusCode() !== 200 || $response->hasHeader('Set-Cookie') || self::hasNonce($response)) {
             return false;
         }
         $control = strtolower($response->getHeaderLine('Cache-Control'));
@@ -93,6 +95,11 @@ final readonly class PageCacheMiddleware implements MiddlewareInterface
         }
 
         return true;
+    }
+
+    private static function hasNonce(ResponseInterface $response): bool
+    {
+        return str_contains($response->getHeaderLine('Content-Security-Policy') . $response->getHeaderLine('Content-Security-Policy-Report-Only'), "'nonce-");
     }
 
     private static function withoutTags(ResponseInterface $response): ResponseInterface
