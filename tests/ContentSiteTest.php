@@ -187,6 +187,21 @@ final class ContentSiteTest extends TestCase
         $this->assertSame(['name' => 'Ada'], $input->only('name', 'company'));
     }
 
+    public function testOnlyKeepsNothingAVisitorAddedToTheForm(): void
+    {
+        // S30: what a visitor can add to a form body, posted for real, urlencoded.
+        $form = static fn (string $body): FormInput => FormInput::from(new ServerRequest('PUT', '/', ['Content-Type' => 'application/x-www-form-urlencoded'], $body));
+        $input = $form('name=Ada&email=ada%40example.com&is_admin=1&role=admin&Name=x&NAME=x&0=x&id=1&name%20=x');
+
+        $this->assertSame(['name' => 'Ada', 'email' => 'ada@example.com'], $input->only('name', 'email'));
+        $this->assertArrayHasKey('is_admin', $input->all(), 'all() keeps them, which is why insert($input->all()) is unsafe');
+
+        // A field sent twice keeps its last value, as in $_POST; "name\0" is read as "name". The visitor chose that
+        // value anyway. As a list, it stays a list, and the database refuses to bind one (S33).
+        $this->assertSame(['name' => 'x'], $form('name=Ada&name%00=x')->only('name'));
+        $this->assertSame(['email' => ['x']], $form('email=a%40b.c&email[]=x')->only('email'));
+    }
+
     public function testUnparsedUrlencodedBodies(): void
     {
         $request = new ServerRequest('PUT', '/', ['Content-Type' => 'application/x-www-form-urlencoded'], 'name=Ada+L&x=');

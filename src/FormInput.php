@@ -87,7 +87,11 @@ final readonly class FormInput
     }
 
     /**
-     * The given fields only, without the absent ones: e.g. to re-display a form.
+     * The given fields only, without the absent ones: e.g. to re-display a form,
+     * or before insert() or update(), which write every column an array names
+     * (S30): `insert($input->all())` lets a visitor add is_admin=1.
+     *
+     *     $db->table('contacts')->insert($input->only('name', 'email'));
      *
      * @return array<string, string|array<array-key, mixed>>
      */

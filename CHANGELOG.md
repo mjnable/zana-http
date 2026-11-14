@@ -7,6 +7,8 @@ not change this package is not listed.
 
 ### Security
 
+- `FormInput::only()` is the way to narrow a form before `insert()` or `update()`, which write every column an array
+  names (S30): `insert($input->all())` lets a visitor add `is_admin=1`. The docblock and the HTTP guide say so.
 - `http.page_cache.query` sets which query parameters go into a page cache key. With the default, `all`, the
   whole query string is kept as before, so anyone can fill the cache by inventing parameters. Set a list
   (`[page, tag]`) to keep only the parameters that change a page, sorted, or `none` when no cached page reads
