@@ -3,6 +3,15 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.20.0 — Unreleased
+
+### Security
+
+- `http.page_cache.query` sets which query parameters go into a page cache key. With the default, `all`, the
+  whole query string is kept as before, so anyone can fill the cache by inventing parameters. Set a list
+  (`[page, tag]`) to keep only the parameters that change a page, sorted, or `none` when no cached page reads
+  the query. Any other value is refused.
+
 ## 2.19.2 — 2026-11-07
 
 ### Security
