@@ -72,7 +72,10 @@ final class HttpServiceProvider extends ServiceProvider
                 $cache = $r->has(CacheInterface::class) ? $r->get(CacheInterface::class) : new MissingCache();
                 assert($cache instanceof CacheInterface);
 
-                return new PageCache($cache, $r->get(ConfigurationInterface::class)->int('http.page_cache.ttl', 3600));
+                $config = $r->get(ConfigurationInterface::class);
+                $query = $config->get('http.page_cache.query', 'all');
+
+                return new PageCache($cache, $config->int('http.page_cache.ttl', 3600), is_array($query) ? array_values($query) : (string) $query);
             })->uses(CacheInterface::class, ConfigurationInterface::class)
             ->singleton(PageCacheMiddleware::class, static function (ServiceResolverInterface $r): PageCacheMiddleware {
                 $config = $r->get(ConfigurationInterface::class);

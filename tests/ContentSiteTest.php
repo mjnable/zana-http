@@ -285,6 +285,67 @@ final class ContentSiteTest extends TestCase
         $this->assertSame('page 1', (string) $middleware->process($page->withUri($page->getUri()->withPath('/old')), $fresh)->getBody(), 'an entry stored before 2.19.2 is not served');
     }
 
+    // ── S25 ────────────────────────────────────────────────────────────────
+
+    public function testByDefaultEveryQueryStringIsItsOwnEntry(): void
+    {
+        $middleware = new PageCacheMiddleware(new PageCache(new MemoryCache()));
+        $handler = new Counter();
+
+        foreach (['?page=2', '?page=2&x=1', '?x=1&page=2', '?page=2'] as $query) {
+            $middleware->process(new ServerRequest('GET', 'https://example.com/news' . $query), $handler);
+        }
+        $this->assertSame(3, $handler->calls, 'as in 2.19');
+    }
+
+    public function testAListKeepsOnlyTheNamedParametersSorted(): void
+    {
+        $store = new MemoryCache();
+        $middleware = new PageCacheMiddleware(new PageCache($store, query: ['page', 'tag']));
+        $handler = new Counter();
+
+        $middleware->process(new ServerRequest('GET', 'https://example.com/news?page=2'), $handler);
+        foreach (['?page=2&x=1', '?utm_source=a&page=2', '?page=2&' . bin2hex(random_bytes(4)) . '=1'] as $query) {
+            $hit = $middleware->process(new ServerRequest('GET', 'https://example.com/news' . $query), $handler);
+            $this->assertSame('HIT', $hit->getHeaderLine('X-Page-Cache'), $query);
+        }
+        $this->assertSame(1, $handler->calls, 'invented parameters add no entries');
+
+        $middleware->process(new ServerRequest('GET', 'https://example.com/news?page=3'), $handler);
+        $middleware->process(new ServerRequest('GET', 'https://example.com/news?tag=a&page=2'), $handler);
+        $this->assertSame('HIT', $middleware->process(new ServerRequest('GET', 'https://example.com/news?page=2&tag=a'), $handler)->getHeaderLine('X-Page-Cache'), 'order does not matter');
+        $this->assertSame(3, $handler->calls, 'the named parameters still change the page');
+    }
+
+    public function testNoneIgnoresTheQuery(): void
+    {
+        $middleware = new PageCacheMiddleware(new PageCache(new MemoryCache(), query: 'none'));
+        $handler = new Counter();
+
+        $middleware->process(new ServerRequest('GET', 'https://example.com/about'), $handler);
+        $middleware->process(new ServerRequest('GET', 'https://example.com/about?a=1'), $handler);
+        $middleware->process(new ServerRequest('GET', 'https://example.com/about?b=2'), $handler);
+        $this->assertSame(1, $handler->calls);
+    }
+
+    public function testAnUnknownQuerySettingIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('http.page_cache.query');
+        new PageCache(new MemoryCache(), query: 'some');
+    }
+
+    public function testTheProviderReadsTheQuerySetting(): void
+    {
+        $kernel = $this->kernel(['http.middleware' => [PageCacheMiddleware::class], 'http.page_cache.query' => ['page']], static fn (ServiceCollectionInterface $s) => $s
+            ->instance(CacheInterface::class, new MemoryCache())
+            ->singleton(Counter::class)
+            ->replace(HttpKernel::HANDLER, static fn (ServiceResolverInterface $r): mixed => $r->get(Counter::class)));
+
+        $kernel->handle(new ServerRequest('GET', 'https://example.com/?page=1'));
+        $this->assertSame('HIT', $kernel->handle(new ServerRequest('GET', 'https://example.com/?page=1&junk=1'))->getHeaderLine('X-Page-Cache'));
+    }
+
     public function testTheTrustedProxiesCheck(): void
     {
         $findings = static fn (array $config): array => array_map(

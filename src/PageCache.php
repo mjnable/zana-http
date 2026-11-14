@@ -19,6 +19,12 @@ use Psr\SimpleCache\CacheInterface;
  * and publishing invalidates the tags: $pageCache->invalidate("post:{$id}").
  * Tags are versioned, so invalidating never scans the cache: entries holding
  * an older version are misses.
+ *
+ * The key holds the query string (2.20, S25): http.page_cache.query "all" keeps all of it,
+ * as before, so anyone can add entries by inventing parameters. A list keeps
+ * only the parameters that change a page, sorted, so ?page=2&x=1 and ?page=2
+ * share one entry. "none" ignores the query, which is right only when no
+ * page reads it.
  */
 final readonly class PageCache
 {
@@ -26,15 +32,22 @@ final readonly class PageCache
 
     private const string PREFIX = 'zana.page.';
 
+    /**
+     * @param string|list<string> $query "all", "none", or the parameters that change a page
+     */
     public function __construct(
         private CacheInterface $cache,
         private int $ttl = 3600,
+        private string|array $query = 'all',
     ) {
+        if (is_string($query) && !in_array($query, ['all', 'none'], true)) {
+            throw new \InvalidArgumentException("http.page_cache.query must be \"all\", \"none\" or a list of parameters; got \"{$query}\".");
+        }
     }
 
     public function get(ServerRequestInterface $request): ?ResponseInterface
     {
-        $entry = $this->cache->get(self::key($request));
+        $entry = $this->cache->get($this->key($request));
         if (!is_array($entry) || !isset($entry['status'], $entry['headers'], $entry['body'], $entry['tags'])) {
             return null;
         }
@@ -59,7 +72,7 @@ final readonly class PageCache
             $tags[$tag] = $this->version($tag);
         }
 
-        $this->cache->set(self::key($request), [
+        $this->cache->set($this->key($request), [
             'status' => $response->getStatusCode(),
             'headers' => $response->withoutHeader(self::TAGS_HEADER)->getHeaders(),
             'body' => (string) $response->getBody(),
@@ -92,10 +105,28 @@ final readonly class PageCache
         return is_int($version) ? $version : 0;
     }
 
-    private static function key(ServerRequestInterface $request): string
+    private function key(ServerRequestInterface $request): string
     {
         $uri = $request->getUri();
+        $query = match (true) {
+            $this->query === 'all' => $uri->getQuery(),
+            $this->query === 'none' => '',
+            is_array($this->query) => self::kept($uri->getQuery(), $this->query),
+            default => $uri->getQuery(),
+        };
 
-        return self::PREFIX . hash('xxh128', $uri->getScheme() . '://' . $uri->getAuthority() . $uri->getPath() . '?' . $uri->getQuery());
+        return self::PREFIX . hash('xxh128', $uri->getScheme() . '://' . $uri->getAuthority() . $uri->getPath() . '?' . $query);
+    }
+
+    /**
+     * @param array<mixed> $names
+     */
+    private static function kept(string $query, array $names): string
+    {
+        parse_str($query, $values);
+        $kept = array_intersect_key($values, array_flip(array_filter($names, is_string(...))));
+        ksort($kept);
+
+        return http_build_query($kept);
     }
 }
