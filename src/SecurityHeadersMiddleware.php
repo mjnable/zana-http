@@ -91,6 +91,28 @@ final readonly class SecurityHeadersMiddleware implements MiddlewareInterface
         );
     }
 
+    /**
+     * The Content-Security-Policy as browsers receive it (2.25): the
+     * application's directives merged over DEFAULT_CSP, each with its
+     * sources ("{nonce}" for the per-request nonce). Empty without a policy.
+     * Packages read it to say when a policy would block what they add, such
+     * as a CAPTCHA widget.
+     *
+     * @return array<string, list<string>>
+     */
+    public function directives(): array
+    {
+        return $this->csp;
+    }
+
+    /**
+     * Whether the policy is only reported, not enforced.
+     */
+    public function reportOnly(): bool
+    {
+        return $this->cspReportOnly;
+    }
+
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $nonce = null;

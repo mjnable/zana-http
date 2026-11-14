@@ -3,6 +3,13 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.25.0 — Unreleased
+
+### Added
+
+- `SecurityHeadersMiddleware::directives()` and `reportOnly()`: the Content-Security-Policy as browsers receive it,
+  for packages that add scripts or frames, such as mj-zana/captcha, to say when the policy would block them.
+
 ## 2.20.0 — 2026-11-14
 
 ### Security

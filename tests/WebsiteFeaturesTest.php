@@ -134,6 +134,11 @@ final class WebsiteFeaturesTest extends TestCase
         $this->assertSame('yes', $response->getHeaderLine('X-Extra'));
         $this->assertFalse($response->hasHeader('Content-Security-Policy'));
         $this->assertSame("default-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data:", $response->getHeaderLine('Content-Security-Policy-Report-Only'));
+
+        // 2.25: the policy as sent, for packages that add scripts or frames.
+        $this->assertSame(['default-src' => ["'self'"], 'frame-ancestors' => ["'none'"], 'base-uri' => ["'self'"], 'form-action' => ["'self'"], 'img-src' => ["'self'", 'data:']], $middleware->directives());
+        $this->assertTrue($middleware->reportOnly());
+        $this->assertFalse((new SecurityHeadersMiddleware())->reportOnly());
     }
 
     public function testNoncesAreFreshPerRequestAndReachTheHandler(): void
