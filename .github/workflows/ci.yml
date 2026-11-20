@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: zana-http
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: mbstring, intl, gd, fileinfo, sodium, zip, pdo_sqlite, pdo_mysql, pdo_pgsql
+          coverage: none
+      # composer.json points at the sibling packages beside this one (../zana-*), as on a developer's machine:
+      # clone them at main, so the package is tested with the code it will be released with.
+      - name: Siblings
+        run: |
+          php -r 'foreach (json_decode(file_get_contents("zana-http/composer.json"), true)["repositories"] ?? [] as $r) { if (($r["type"] ?? "") === "path") { echo basename($r["url"]), PHP_EOL; } }' |
+            while read -r sibling; do
+              git clone --quiet --depth 1 "https://github.com/mjnable/${sibling}.git" "$sibling"
+            done
+      - run: git config --global user.name CI && git config --global user.email ci@example.com
+      - run: composer update --no-interaction --no-progress
+        working-directory: zana-http
+      - name: PHPUnit
+        working-directory: zana-http
+        run: |
+          set -o pipefail
+          vendor/bin/phpunit --display-skipped --display-incomplete | tee phpunit.out
+      - name: PHPStan
+        working-directory: zana-http
+        run: vendor/bin/phpstan analyse --memory-limit=1G --no-progress
