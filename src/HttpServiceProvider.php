@@ -55,6 +55,17 @@ final class HttpServiceProvider extends ServiceProvider
             ))->uses(ResponseFactory::class, Environment::class, LoggerInterface::class, ErrorRendererInterface::class, ConfigurationInterface::class)
             ->singleton(MiddlewareCheck::class)->tag(ApplicationCheck::TAG, MiddlewareCheck::class)
             ->singleton(TrustedProxiesCheck::class)->tag(ApplicationCheck::TAG, TrustedProxiesCheck::class)
+            // 2.32: cross-origin reads by the pages of listed sites.
+            ->singleton(CorsPolicy::class, static fn (ServiceResolverInterface $r): CorsPolicy => CorsPolicy::fromConfig($r->get(ConfigurationInterface::class)->array('http.cors', [])))->uses(ConfigurationInterface::class)
+            ->scoped(CorsMiddleware::class, static function (ServiceResolverInterface $r): CorsMiddleware {
+                $policy = $r->get(CorsPolicy::class);
+                $responses = $r->get(ResponseFactory::class);
+                $errors = $r->get(ErrorMiddleware::class);
+                assert($policy instanceof CorsPolicy && $responses instanceof ResponseFactory && $errors instanceof ErrorMiddleware);
+
+                return new CorsMiddleware($policy, $responses, $errors);
+            })->uses(CorsPolicy::class, ResponseFactory::class, ErrorMiddleware::class)
+            ->singleton(Inspection\CorsCheck::class)->tag(ApplicationCheck::TAG, Inspection\CorsCheck::class)
             ->scoped(SecurityHeadersMiddleware::class, static fn (ServiceResolverInterface $r): SecurityHeadersMiddleware => SecurityHeadersMiddleware::fromConfig(
                 $r->get(ConfigurationInterface::class)->array('http.security_headers', []),
                 $r->get(RequestContext::class),

@@ -3,6 +3,22 @@
 All Zana packages share one version number and are released together. A release that did
 not change this package is not listed.
 
+## 2.32.0 — Unreleased
+
+### Added
+
+- `CorsMiddleware`, `CorsPolicy` and `http.cors` (`origins`, `methods`, `headers`, `expose`, `credentials`,
+  `max_age`): the pages of the listed sites may read the answers. A preflight is answered before routing, 204 when
+  the origin, the method and every requested header are listed, otherwise 403. A listed origin is echoed in
+  `Access-Control-Allow-Origin`, also on errors, which are rendered inside the middleware; every answer says
+  `Vary: Origin`. Origins are exact, as a browser sends them (the default port left out, scheme and host in any
+  case); `https://*.example.com` is any subdomain, never the domain itself nor a host that only ends like it; `*` is
+  any origin, and only without credentials; `null`, a path, user information or another scheme is never an origin.
+- `check` (`http.cors`): `*` with credentials and an entry that is not an origin (errors: the entry is left out, so
+  the policy allows less), a pattern over a top-level domain (an error), plain HTTP for a host other than localhost
+  (a warning), and origins listed while `CorsMiddleware` is not in `http.middleware` (a warning).
+- With no origin listed, the middleware does nothing.
+
 ## 2.25.0 — 2026-11-14
 
 ### Added
